@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+enum QuoteStatus {
+  NEW
+  QUOTED
+  ACCEPTED
+  DECLINED
+}
+enum ListingType {
+  REQUEST
+  OFFER
+}
+enum Direction {
+  INDIA_TO_CH
+  CH_TO_INDIA
+}
+enum ListingStatus {
+  OPEN
+  MATCHED
+  CLOSED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(USER)
+  phone        String?
+  createdAt    DateTime  @default(now())
+  orders       Order[]
+  quotes       Quote[]
+  listings     Listing[]
+  sent         Message[] @relation("sent")
+  received     Message[] @relation("received")
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  name        String
+  description String
+  category    String
+  priceRappen Int
+  weightG     Int         @default(0)
+  imageUrl    String?
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  items       OrderItem[]
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id])
+  email           String
+  name            String
+  phone           String?
+  street          String
+  zip             String
+  city            String
+  canton          String?
+  status          OrderStatus @default(PENDING)
+  subtotalRappen  Int
+  shippingRappen  Int
+  totalRappen     Int
+  stripeSessionId String?     @unique
+  createdAt       DateTime    @default(now())
+  items           OrderItem[]
+}
+
+model OrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product @relation(fields: [productId], references: [id])
+  name       String
+  qty        Int
+  unitRappen Int
+}
+
+model Quote {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  url          String
+  description  String
+  qty          Int         @default(1)
+  status       QuoteStatus @default(NEW)
+  quotedRappen Int?
+  adminNote    String?
+  createdAt    DateTime    @default(now())
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  type        ListingType
+  direction   Direction
+  title       String
+  description String
+  date        DateTime
+  feeRappen   Int
+  maxWeightG  Int?
+  status      ListingStatus @default(OPEN)
+  createdAt   DateTime      @default(now())
+  messages    Message[]
+
+  @@index([type, status, direction])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  fromUserId String
+  from       User     @relation("sent", fields: [fromUserId], references: [id])
+  toUserId   String
+  to         User     @relation("received", fields: [toUserId], references: [id])
+  body       String
+  createdAt  DateTime @default(now())
+}
