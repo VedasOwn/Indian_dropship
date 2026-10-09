@@ -20,6 +20,7 @@ export const verifyPassword = (p: string, h: string) => bcrypt.compare(p, h);
 export async function createSession(userId: string) {
   const token = await new SignJWT({ sub: userId })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
     .setExpirationTime(`${MAX_AGE}s`)
     .sign(key());
   (await cookies()).set(COOKIE, token, {
@@ -43,7 +44,11 @@ export async function getUser() {
     if (!payload.sub) return null;
     return await db.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, name: true, role: true, phone: true },
+      select: { id: true, email: true, name: true, role: true, phone: true, passwordChangedAt: true },
+    }).then((u) => {
+      // Sessions issued before the last password change are no longer valid.
+      if (u?.passwordChangedAt && (payload.iat ?? 0) < Math.floor(u.passwordChangedAt.getTime() / 1000)) return null;
+      return u;
     });
   } catch {
     return null;

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
 import { toRappen } from '@/lib/format';
+import { mail } from '@/lib/email';
 import type { FormState } from './auth';
 
 const schema = z.object({
@@ -54,6 +55,9 @@ export async function sendMessage(_: FormState, fd: FormData): Promise<FormState
   // Only the listing owner and the other party may talk; messages go to/from the owner.
   const validPair = (user.id === listing.userId && toUserId !== user.id) || toUserId === listing.userId;
   if (!validPair || user.id === toUserId) return { error: 'You cannot message this user' };
+  const recipient = await db.user.findUnique({ where: { id: toUserId }, select: { email: true } });
   await db.message.create({ data: { listingId, fromUserId: user.id, toUserId, body } });
+  // Notification contains no message body or contact details, just a pointer back to the site.
+  if (recipient) await mail.newMessage(recipient.email, user.name.split(' ')[0], listing.title, listingId);
   redirect(`/travel/${listingId}?sent=1`);
 }

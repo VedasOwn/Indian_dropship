@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/auth';
+import { mail } from '@/lib/email';
 import type { FormState } from './auth';
 
 const schema = z.object({
@@ -16,6 +17,7 @@ export async function createQuote(_: FormState, fd: FormData): Promise<FormState
   const parsed = schema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   await db.quote.create({ data: { ...parsed.data, userId: user.id } });
+  await mail.quoteRequested(parsed.data.url, `${user.name} <${user.email}>`);
   redirect('/account?quote=1');
 }
 
@@ -26,5 +28,6 @@ export async function respondToQuote(fd: FormData) {
   const q = await db.quote.findUnique({ where: { id } });
   if (!q || q.userId !== user.id || q.status !== 'QUOTED') return;
   await db.quote.update({ where: { id }, data: { status: accept ? 'ACCEPTED' : 'DECLINED' } });
+  await mail.quoteResponded(accept, `${user.name} <${user.email}>`);
   redirect('/account');
 }

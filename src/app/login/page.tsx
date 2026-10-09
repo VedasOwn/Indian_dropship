@@ -14,6 +14,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
         <Field label="Email" name="email" type="email" />
         <Field label="Password" name="password" type="password" />
       </ActionForm>
+      <p className="mt-4 text-sm"><Link href="/forgot" className="text-ink/60 hover:text-ink">Forgot password?</Link></p>
       <p className="mt-6 text-sm text-ink/60">
         New here? <Link href={`/register?next=${encodeURIComponent(next)}`} className="text-swiss">Create an account</Link>
       </p>

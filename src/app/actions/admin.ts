@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { slugify, toRappen } from '@/lib/format';
+import { mail } from '@/lib/email';
+import { chf } from '@/lib/format';
 import type { FormState } from './auth';
 
 const productSchema = z.object({
@@ -38,7 +40,10 @@ export async function saveProduct(_: FormState, fd: FormData): Promise<FormState
 export async function setOrderStatus(fd: FormData) {
   await requireAdmin();
   const status = z.enum(['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED']).parse(fd.get('status'));
-  await db.order.update({ where: { id: String(fd.get('id')) }, data: { status } });
+  const before = await db.order.findUnique({ where: { id: String(fd.get('id')) } });
+  if (!before) return;
+  await db.order.update({ where: { id: before.id }, data: { status } });
+  if (status !== before.status && ['PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'].includes(status)) await mail.orderStatus(before.email, before.id, status);
   revalidatePath('/admin/orders');
 }
 
@@ -46,9 +51,11 @@ export async function answerQuote(fd: FormData) {
   await requireAdmin();
   const price = Number(fd.get('price'));
   if (!(price > 0)) return;
-  await db.quote.update({
+  const q = await db.quote.update({
     where: { id: String(fd.get('id')) },
     data: { quotedRappen: toRappen(price), adminNote: String(fd.get('note') ?? '').slice(0, 500) || null, status: 'QUOTED' },
+    include: { user: { select: { email: true } } },
   });
+  await mail.quoteReady(q.user.email, chf(toRappen(price)));
   revalidatePath('/admin/quotes');
 }

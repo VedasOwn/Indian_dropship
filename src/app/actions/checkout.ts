@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { getUser } from '@/lib/auth';
 import { stripe, appUrl } from '@/lib/stripe';
 import { shippingFor } from '@/lib/format';
+import { mail } from '@/lib/email';
+import { chf } from '@/lib/format';
 import type { FormState } from './auth';
 
 const schema = z.object({
@@ -60,7 +62,13 @@ export async function checkout(_: FormState, fd: FormData): Promise<FormState> {
   });
 
   // Without Stripe configured the order stays PENDING and is settled by invoice.
-  if (!stripe) redirect(`/orders/${order.id}?placed=1`);
+  if (!stripe) {
+    await Promise.all([
+      mail.orderPlaced(addr.email, order.id, chf(order.totalRappen), true),
+      mail.orderAdmin(order.id, `${addr.name} <${addr.email}>`, chf(order.totalRappen), 'awaiting payment'),
+    ]);
+    redirect(`/orders/${order.id}?placed=1`);
+  }
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
